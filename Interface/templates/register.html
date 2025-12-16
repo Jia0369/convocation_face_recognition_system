@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Student Registration</title>
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600&display=swap" rel="stylesheet">
+  <style>
+    body {
+      margin: 0;
+      font-family: 'Poppins', sans-serif;
+      display: flex;
+      height: 100vh;
+    }
+
+    .left-panel {
+      background-color: #e6f0ff;
+      color: #004080;
+      width: 40%;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      text-align: center;
+      padding: 60px;
+    }
+
+    .left-panel h2 {
+      font-size: 26px;
+      margin-bottom: 10px;
+    }
+
+    .left-panel p {
+      max-width: 300px;
+    }
+
+    .right-panel {
+      background-color: #f7faff;
+      width: 60%;
+      padding: 80px 60px;
+    }
+
+    .right-panel h2 {
+      font-size: 26px;
+      margin-bottom: 5px;
+      color: #003366;
+    }
+
+    .right-panel p {
+      color: #4d6080;
+      margin-bottom: 30px;
+    }
+
+    .form-group {
+      margin-bottom: 20px;
+    }
+
+    .form-group label {
+      display: block;
+      margin-bottom: 6px;
+      font-weight: 500;
+      color: #004080;
+    }
+
+    .form-group input[type="text"],
+    .form-group input[type="password"],
+    .form-group input[type="email"] {
+      width: 100%;
+      padding: 12px;
+      border: 1px solid #cfd9e6;
+      background-color: #eef3fb;
+      border-radius: 4px;
+    }
+
+    .form-group select {
+      width: 100%;
+      padding: 12px;
+      border: 1px solid #cfd9e6;
+      background-color: #eef3fb;
+      border-radius: 4px;
+      font-family: 'Poppins', sans-serif;
+    }
+
+    .form-group input[type="file"] {
+      background-color: transparent;
+      border: none;
+      font-family: 'Poppins', sans-serif;
+    }
+
+    #courseOtherGroup {
+      margin-top: 10px;
+      padding: 12px;
+      background: #f1f6ff;
+      border: 1px dashed #b6c7e3;
+      border-radius: 8px;
+    }
+
+    #course_other {
+      width: 100%;
+      padding: 12px;
+      border: 1px solid #cfd9e6;
+      background: #fff;
+      border-radius: 8px;
+      font-size: 14px;
+      color: #002244;
+    }
+
+    .register-btn {
+      background-color: #3399ff;
+      color: white;
+      padding: 12px 32px;
+      font-size: 16px;
+      font-weight: bold;
+      border: none;
+      cursor: pointer;
+      border-radius: 5px;
+      margin-top: 10px;
+    }
+
+    .popup {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background-color: rgba(0, 64, 128, 0.5);
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      z-index: 999;
+    }
+
+    .popup-content {
+      background-color: #ffffff;
+      padding: 30px 40px;
+      border-radius: 10px;
+      box-shadow: 0 8px 20px rgba(0,0,0,0.3);
+      text-align: center;
+    }
+
+    .popup-content h3 {
+      margin-top: 0;
+      color: #004080;
+    }
+
+    .popup-content button {
+      margin-top: 20px;
+      background-color: #3399ff;
+      color: white;
+      border: none;
+      padding: 10px 20px;
+      font-weight: bold;
+      border-radius: 5px;
+      cursor: pointer;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- LEFT SIDE -->
+  <div class="left-panel">
+    <div>
+      <h2>Join the Student System</h2>
+      <p>
+        Easily create your student account, upload your photo, and get verified through AI during your convocation.
+      </p>
+    </div>
+  </div>
+
+  <!-- RIGHT SIDE -->
+  <div class="right-panel">
+    <h2><strong>Register Account</strong></h2>
+    <p>Fill in your details to create a student account</p>
+
+    <form method="POST" action="/register" enctype="multipart/form-data">
+      <div class="form-group">
+        <label for="name">Full Name</label>
+        <input type="text" id="name" name="name" required>
+      </div>
+
+      <div class="form-group">
+        <label for="email">Email Address</label>
+        <input type="email" id="email" name="email" required>
+      </div>
+
+      <div class="form-group">
+        <label for="password">Create Password</label>
+        <input type="password" id="password" name="password" required>
+      </div>
+
+      <div class="form-group">
+        <label for="course">Course</label>
+        <select id="course" name="course" required>
+          <option value="" disabled selected>Select your course</option>
+          <optgroup label="Computing">
+            <option value="BSc (Hons) Computer Science">BSc (Hons) Computer Science</option>
+            <option value="BSc (Hons) Information Systems">BSc (Hons) Information Systems</option>
+            <option value="Diploma in Computer Science">Diploma in Computer Science</option>
+          </optgroup>
+          <optgroup label="Engineering">
+            <option value="BEng (Hons) Electrical & Electronic">BEng (Hons) Electrical & Electronic</option>
+            <option value="BEng (Hons) Mechanical">BEng (Hons) Mechanical</option>
+          </optgroup>
+          <optgroup label="Business">
+            <option value="BBA (Hons)">BBA (Hons)</option>
+            <option value="BCom (Hons) Accounting">BCom (Hons) Accounting</option>
+          </optgroup>
+          <option value="Other">Other</option>
+        </select>
+      </div>
+
+      <div class="form-group" id="courseOtherGroup" style="display: none;">
+        <label for="course_other">Specify Course</label>
+        <input type="text" id="course_other" name="course_other">
+      </div>
+
+      <div class="form-group">
+        <label for="photo">Upload Profile Photo</label>
+        <input type="file" id="photo" name="photo" accept="image/*" required>
+      </div>
+
+      <button type="submit" class="register-btn">Register</button>
+    </form>
+
+    {% if success %}
+    <div id="popup" class="popup">
+      <div class="popup-content">
+        <h3>Registration Successful!</h3>
+        <p>Your Student ID is: <strong>{{ student_id }}</strong></p>
+        <button onclick="redirectToLogin()">OK</button>
+      </div>
+    </div>
+    {% endif %}
+  </div>
+
+  <script>
+    (function () {
+      const select = document.getElementById('course');
+      const otherGroup = document.getElementById('courseOtherGroup');
+      const otherInput = document.getElementById('course_other');
+
+      function syncOther() {
+        if (select.value === 'Other') {
+          otherGroup.style.display = 'block';
+          otherInput.required = true;
+        } else {
+          otherGroup.style.display = 'none';
+          otherInput.required = false;
+          otherInput.value = '';
+        }
+      }
+
+      select.addEventListener('change', syncOther);
+      syncOther();
+    })();
+
+    function redirectToLogin() {
+      window.location.href = "/";
+    }
+  </script>
+</body>
+</html>

@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Face Scanner</title>
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600&display=swap" rel="stylesheet">
+  <style>
+    body { font-family: 'Poppins', sans-serif; background: #f7faff; text-align: center; padding: 40px; }
+    h2 { color: #003366; margin-bottom: 8px; }
+    .panel { max-width: 720px; margin: 0 auto; background: #fff; border-radius: 12px; padding: 24px; box-shadow: 0 2px 16px rgba(0,0,0,.06); }
+    #reader { width: 100%; max-width: 520px; margin: 16px auto; position: relative; }
+    #video { width: 100%; max-width: 520px; }
+    #videoCanvas { position: absolute; top: 0; left: 0; width: 100%; max-width: 520px; }
+    .row { display: flex; gap: 12px; justify-content: center; margin: 12px 0; flex-wrap: wrap; }
+    button { background: #3399ff; color: #fff; padding: 10px 18px; border: none; border-radius: 8px; font-weight: 600; cursor: pointer; }
+    button.secondary { background: #004080; }
+    button:disabled { opacity: .6; cursor: not-allowed; }
+    .msg { margin-top: 12px; font-weight: 600; }
+    .ok { color: #107c10; }
+    .err { color: #b00020; }
+    .card { background: #eef3fb; border: 1px solid #cfd9e6; border-radius: 10px; padding: 12px; margin: 12px auto; max-width: 520px; text-align: left; }
+    .label { color: #004080; font-weight: 600; }
+    .value { color: #002244; }
+    .footer { margin-top: 16px; }
+    #processCanvas { display: none; }
+    .modal-backdrop {
+      display: none;
+      position: fixed; inset: 0;
+      background: rgba(0,0,0,.45);
+      align-items: center; justify-content: center;
+      z-index: 9999;
+    }
+    .modal {
+      background: #fff; width: 90%; max-width: 420px;
+      border-radius: 12px; padding: 20px;
+      box-shadow: 0 10px 30px rgba(0,0,0,.2);
+      text-align: left;
+    }
+    .modal h3 { margin: 0 0 8px; color: #002244; }
+    .modal p { margin: 0 0 16px; color: #334; }
+    .modal .buttons { display: flex; gap: 10px; justify-content: flex-end; }
+    .btn-primary { background: #3399ff; color: #fff; border: none; padding: 10px 14px; border-radius: 8px; }
+  </style>
+</head>
+<body>
+  <div class="panel">
+    <h2>Face Scanner</h2>
+    <p>Position your face in the camera to verify your identity for Student ID: {{ student_id }}.</p>
+
+    <div class="row">
+      <button id="startBtn">Start Camera</button>
+      <form action="{{ url_for('home') }}" style="display:inline;">
+        <button class="secondary" type="submit">Back to Home</button>
+      </form>
+    </div>
+
+    <div id="reader">
+      <video id="video" autoplay playsinline></video>
+      <canvas id="videoCanvas"></canvas>
+    </div>
+    <canvas id="processCanvas" width="320" height="240"></canvas>
+
+    <div id="status" class="msg"></div>
+
+    <div id="resultCard" class="card" style="display:none;">
+      <div><span class="label">Student ID:</span> <span class="value">{{ student_id }}</span></div>
+      <div><span class="label">Recognized Name:</span> <span class="value" id="resName">-</span></div>
+      <div><span class="label">Match Status:</span> <span class="value" id="resMatch">-</span></div>
+    </div>
+
+    <div class="footer">
+      <small>Tip: Ensure your face is well-lit and centered in the camera.</small>
+    </div>
+  </div>
+
+  <div id="confirmBackdrop" class="modal-backdrop">
+    <div class="modal">
+      <h3 id="confirmTitle">Congratulations</h3>
+      <p id="confirmMsg">Congratulations!</p>
+      <div class="buttons">
+        <button id="okBtn" class="btn-primary" type="button">OK</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    let stream = null;
+    let processing = false;
+    let rafId = null;
+    let lastSent = 0;
+    let startTime = null;
+    let pausedForConfirm = false;
+
+    const video = document.getElementById('video');
+    const videoCanvas = document.getElementById('videoCanvas');
+    const ctx = videoCanvas.getContext('2d');
+    const processCanvas = document.getElementById('processCanvas');
+    const processCtx = processCanvas.getContext('2d');
+    const startBtn = document.getElementById('startBtn');
+    const statusEl = document.getElementById('status');
+    const resultCard = document.getElementById('resultCard');
+    const resName = document.getElementById('resName');
+    const resMatch = document.getElementById('resMatch');
+
+    const confirmBackdrop = document.getElementById('confirmBackdrop');
+    const confirmTitle = document.getElementById('confirmTitle');
+    const confirmMsg = document.getElementById('confirmMsg');
+    const okBtn = document.getElementById('okBtn');
+
+    function setStatus(text, cls) {
+      statusEl.className = 'msg ' + (cls || '');
+      statusEl.textContent = text || '';
+    }
+
+    function openCongrats(name, course) {
+      pausedForConfirm = true;
+      confirmTitle.textContent = 'Congratulations';
+      confirmMsg.textContent = `Congratulations ${name} for graduating from ${course || 'your course'}!`;
+      confirmBackdrop.style.display = 'flex';
+
+      okBtn.onclick = () => {
+        confirmBackdrop.style.display = 'none';
+        pausedForConfirm = false;
+        stopCamera();
+      };
+    }
+
+    async function processFrames() {
+      if (!stream || processing || pausedForConfirm) {
+        rafId = requestAnimationFrame(processFrames);
+        return;
+      }
+
+      if (startTime && (Date.now() - startTime) / 1000 > 30) {
+        setStatus('❌ No face detected after 30 seconds.', 'err');
+        startTime = Date.now();
+      }
+
+      ctx.drawImage(video, 0, 0, videoCanvas.width, videoCanvas.height);
+
+      const now = Date.now();
+      if (now - lastSent < 1000) {
+        rafId = requestAnimationFrame(processFrames);
+        return;
+      }
+      lastSent = now;
+      processing = true;
+
+      processCtx.clearRect(0, 0, processCanvas.width, processCanvas.height);
+      processCtx.drawImage(video, 0, 0, processCanvas.width, processCanvas.height);
+
+      const frameData = processCanvas.toDataURL('image/jpeg', 0.9);
+      try {
+        const resp = await fetch("/api/validate_face/{{ student_id }}", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ frame_image: frameData })
+        });
+        const data = await resp.json();
+
+        ctx.font = '20px Poppins';
+        ctx.fillStyle = data.ok ? 'green' : 'red';
+        ctx.fillText(`${data.name || 'Unknown'}`, 30, 40);
+
+        if (data.ok) {
+          setStatus("✅ Face verified.", "ok");
+          resName.textContent = data.name || "-";
+          resMatch.textContent = "Match";
+          resMatch.style.color = '#107c10';
+          resultCard.style.display = 'block';
+
+          openCongrats(data.name || 'Student', data.course);
+        } else {
+          setStatus(`❌ ${data.message || "Face verification failed."}`, "err");
+          resName.textContent = data.name || "-";
+          resMatch.textContent = "No Match";
+          resMatch.style.color = '#b00020';
+          resultCard.style.display = 'block';
+        }
+      } catch (err) {
+        ctx.fillStyle = 'red';
+        ctx.fillText("Error", 30, 40);
+        setStatus("❌ Face validation error.", "err");
+      }
+
+      processing = false;
+      rafId = requestAnimationFrame(processFrames);
+    }
+
+    async function startCamera() {
+      setStatus("Starting camera...", "");
+      startBtn.disabled = true;
+      startTime = Date.now();
+      lastSent = 0;
+
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user", width: 320, height: 240 } });
+        video.srcObject = stream;
+        video.onloadedmetadata = () => {
+          videoCanvas.width = video.videoWidth;
+          videoCanvas.height = video.videoHeight;
+          processCanvas.width = video.videoWidth;
+          processCanvas.height = video.videoHeight;
+          setStatus("Camera running. Processing face...", "");
+          processFrames();
+        };
+      } catch (err) {
+        setStatus("❌ Failed to start camera: " + err.message, "err");
+        startBtn.disabled = false;
+      }
+    }
+
+    function stopCamera() {
+      if (stream) {
+        stream.getTracks().forEach(track => track.stop());
+        stream = null;
+      }
+      if (rafId) {
+        cancelAnimationFrame(rafId);
+        rafId = null;
+      }
+      video.srcObject = null;
+      ctx.clearRect(0, 0, videoCanvas.width, videoCanvas.height);
+      setStatus("Camera stopped.", "");
+      startBtn.disabled = false;
+      processing = false;
+      pausedForConfirm = false;
+    }
+
+    function init() {
+      startBtn.addEventListener("click", startCamera);
+      setStatus("Ready to start camera.", "");
+    }
+
+    init();
+  </script>
+</body>
+</html>

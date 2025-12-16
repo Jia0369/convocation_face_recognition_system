@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Student Registration System</title>
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600&display=swap" rel="stylesheet">
+  <style>
+    body {
+      margin: 0;
+      font-family: 'Poppins', sans-serif;
+      display: flex;
+      height: 100vh;
+    }
+
+    .left-panel {
+      background-color: #e6f0ff;
+      color: #004080;
+      width: 40%;
+      display: flex;
+      justify-content: center;
+      align-items: flex-start;
+      text-align: center;
+      padding: 80px 0;
+    }
+
+    .content-wrapper {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: flex-start;
+    }
+
+    .left-panel h2 {
+      font-size: 26px;
+      margin-bottom: 10px;
+    }
+
+    .left-panel p {
+      margin-bottom: 20px;
+    }
+
+    .signup-btn {
+      background-color: #3399ff;
+      color: white;
+      border: 2px solid white;
+      padding: 12px 32px;
+      font-size: 16px;
+      font-weight: bold;
+      cursor: pointer;
+      border-radius: 5px;
+    }
+
+    .right-panel {
+      background-color: #f7faff;
+      width: 60%;
+      padding: 80px 60px;
+    }
+
+    .right-panel h2 {
+      font-size: 26px;
+      margin-bottom: 5px;
+      color: #003366;
+    }
+
+    .right-panel p {
+      color: #4d6080;
+      margin-bottom: 30px;
+    }
+
+    .form-group {
+      margin-bottom: 20px;
+    }
+
+    .form-group input[type="text"],
+    .form-group input[type="password"] {
+      width: 100%;
+      padding: 12px;
+      border: 1px solid #cfd9e6;
+      background-color: #eef3fb;
+      border-radius: 4px;
+    }
+
+    .form-group label {
+      display: block;
+      margin-bottom: 6px;
+      font-weight: 500;
+      color: #004080;
+    }
+
+    .form-check {
+      margin-bottom: 20px;
+    }
+
+    .form-check input {
+      margin-right: 5px;
+    }
+
+    .form-check label {
+      color: #004080;
+    }
+
+    .login-btn {
+      background-color: #3399ff;
+      color: white;
+      padding: 12px 32px;
+      font-size: 16px;
+      font-weight: bold;
+      border: none;
+      cursor: pointer;
+      border-radius: 5px;
+    }
+
+    .fab-menu {
+      position: fixed;
+      right: 24px;
+      bottom: 24px;
+      z-index: 1000;
+    }
+
+    .fab-btn {
+      width: 54px;
+      height: 54px;
+      border-radius: 50%;
+      background: #3399ff;
+      color: #fff;
+      border: none;
+      cursor: pointer;
+      font-size: 22px;
+      font-weight: 700;
+      box-shadow: 0 6px 18px rgba(0,0,0,.15);
+    }
+
+    .fab-btn:focus {
+      outline: 3px solid rgba(51,153,255,.35);
+    }
+
+    .menu-panel {
+      display: none;
+      position: absolute;
+      right: 0;
+      bottom: 68px;
+      background: #fff;
+      border: 1px solid #cfd9e6;
+      border-radius: 12px;
+      padding: 10px;
+      min-width: 220px;
+      box-shadow: 0 12px 30px rgba(0,0,0,.15);
+    }
+
+    .menu-panel.show {
+      display: block;
+    }
+
+    .menu-title {
+      margin: 6px 10px 10px;
+      color: #003366;
+      font-weight: 600;
+      font-size: 14px;
+    }
+
+    .menu-item {
+      display: block;
+      text-decoration: none;
+      margin: 6px 10px;
+      padding: 10px 14px;
+      border-radius: 8px;
+      font-weight: 600;
+      text-align: center;
+      background: #3399ff;
+      color: #fff;
+    }
+
+    .menu-item:hover {
+      filter: brightness(0.95);
+    }
+  </style>
+</head>
+<body>
+
+  <!-- LEFT SIDE -->
+  <div class="left-panel">
+    <div class="content-wrapper">
+      <h2>Student Registration System</h2>
+      <p style="max-width: 300px; margin-bottom: 20px;">
+        Register now to create your student profile. Upload your photo or take one instantly, and your identity will be verified using AI-based facial recognition at the graduation ceremony.
+      </p>
+      <form action="/register" method="get">
+        <button class="signup-btn" type="submit">Sign up</button>
+      </form>
+    </div>
+  </div>
+
+  <!-- RIGHT SIDE -->
+  <div class="right-panel">
+    <h2><strong>Login Account</strong></h2>
+    <p>Sign in to continue your progress</p>
+
+    <form method="POST" action="/login">
+      <div class="form-group">
+        <label for="student_id">Student ID</label>
+        <input type="text" id="student_id" name="student_id" required>
+      </div>
+
+      <div class="form-group">
+        <label for="password">Password</label>
+        <input type="password" id="password" name="password" required>
+      </div>
+
+      <div class="form-check">
+        <input type="checkbox" id="show_password" onclick="togglePassword()">
+        <label for="show_password">Show password</label>
+      </div>
+
+      <button type="submit" class="login-btn">Sign in</button>
+    </form>
+  </div>
+
+  <div class="fab-menu" aria-live="polite">
+    <button id="menuToggle" class="fab-btn" aria-expanded="false" aria-controls="menuPanel" title="Open menu">☰</button>
+    <div id="menuPanel" class="menu-panel" role="menu" aria-hidden="true">
+      <div class="menu-title">Quick Actions</div>
+      <a class="menu-item" role="menuitem" href="{{ url_for('to_scanPage') }}">Go to Scanner</a>
+    </div>
+  </div>
+
+  <script>
+    (function () {
+      const btn = document.getElementById('menuToggle');
+      const panel = document.getElementById('menuPanel');
+
+      function toggleMenu(force) {
+        const show = (typeof force === 'boolean') ? force : !panel.classList.contains('show');
+        panel.classList.toggle('show', show);
+        btn.setAttribute('aria-expanded', show ? 'true' : 'false');
+        panel.setAttribute('aria-hidden', show ? 'false' : 'true');
+      }
+
+      btn.addEventListener('click', () => toggleMenu());
+      document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') toggleMenu(false);
+      });
+      document.addEventListener('click', (e) => {
+        if (!e.target.closest('.fab-menu')) toggleMenu(false);
+      });
+    })();
+
+    function togglePassword() {
+      const pwd = document.getElementById("password");
+      pwd.type = pwd.type === "password" ? "text" : "password";
+    }
+  </script>
+</body>
+</html>

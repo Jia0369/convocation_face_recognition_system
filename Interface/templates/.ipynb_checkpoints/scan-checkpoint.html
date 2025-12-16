@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>QR Scanner</title>
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600&display=swap" rel="stylesheet">
+  <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
+  <style>
+    body { font-family: 'Poppins', sans-serif; background: #f7faff; text-align: center; padding: 40px; }
+    h2 { color: #003366; margin-bottom: 8px; }
+    .panel { max-width: 720px; margin: 0 auto; background: #fff; border-radius: 12px; padding: 24px; box-shadow: 0 2px 16px rgba(0,0,0,.06); }
+    #reader { width: 100%; max-width: 520px; margin: 16px auto; }
+    .row { display: flex; gap: 12px; justify-content: center; margin: 12px 0; flex-wrap: wrap; }
+    button { background: #3399ff; color: #fff; padding: 10px 18px; border: none; border-radius: 8px; font-weight: 600; cursor: pointer; }
+    button.secondary { background: #004080; }
+    button:disabled { opacity: .6; cursor: not-allowed; }
+    .msg { margin-top: 12px; font-weight: 600; }
+    .ok { color: #107c10; }
+    .err { color: #b00020; }
+    .card { background: #eef3fb; border: 1px solid #cfd9e6; border-radius: 10px; padding: 12px; margin: 12px auto; max-width: 520px; text-align: left; }
+    .label { color: #004080; font-weight: 600; }
+    .value { color: #002244; }
+    .photo { margin-top: 10px; }
+    .photo img { max-width: 160px; border-radius: 8px; border: 2px solid #3399ff; }
+    .footer { margin-top: 16px; }
+  </style>
+</head>
+<body>
+  <div class="panel">
+    <h2>QR Scanner</h2>
+    <p>Scan a QR code (<strong>StudentID|Name</strong>, e.g., <code>S001|Ma Jian Chun</code>) to confirm your identity.</p>
+
+    <div class="row">
+      <button id="startBtn">Start Camera</button>
+      <button id="stopBtn" class="secondary" disabled>Stop</button>
+      <form action="{{ url_for('home') }}" style="display:inline;">
+        <button class="secondary" type="submit">Back to Home</button>
+      </form>
+    </div>
+
+    <div id="reader"></div>
+
+    <div id="status" class="msg"></div>
+
+    <div id="resultCard" class="card" style="display:none;">
+      <div><span class="label">Student ID:</span> <span class="value" id="resId">-</span></div>
+      <div><span class="label">Name:</span> <span class="value" id="resName">-</span></div>
+      <div><span class="label">Email:</span> <span class="value" id="resEmail">-</span></div>
+      <div class="photo" id="resPhotoWrap" style="display:none;">
+        <span class="label">Photo:</span>
+        <div><img id="resPhoto" alt="Student Photo" onerror="console.error('Failed to load image:', this.src)"></div>
+      </div>
+      <div class="row" id="proceedButton" style="display:none; margin-top: 12px;">
+        <a id="faceScanLink" href="#"><button>Proceed to Face Scan</button></a>
+      </div>
+    </div>
+
+    <div class="footer">
+      <small>Tip: Hold the QR steady ~20–30 cm from the camera.</small>
+    </div>
+  </div>
+
+  <script>
+    const startBtn = document.getElementById('startBtn');
+    const stopBtn = document.getElementById('stopBtn');
+    const statusEl = document.getElementById('status');
+    const resultCard = document.getElementById('resultCard');
+    const resId = document.getElementById('resId');
+    const resName = document.getElementById('resName');
+    const resEmail = document.getElementById('resEmail');
+    const resPhoto = document.getElementById('resPhoto');
+    const resPhotoWrap = document.getElementById('resPhotoWrap');
+    const proceedButton = document.getElementById('proceedButton');
+    const faceScanLink = document.getElementById('faceScanLink');
+
+    let html5QrcodeScanner = null;
+    let currentCameraId = null;
+
+    function setStatus(text, cls) {
+      statusEl.className = 'msg ' + (cls || '');
+      statusEl.textContent = text || '';
+    }
+
+    async function validateQR(qrText) {
+      setStatus("Validating QR code...", "");
+      try {
+        const resp = await fetch("{{ url_for('validate_qr') }}", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ qr: qrText })
+        });
+        const data = await resp.json();
+
+        if (data.ok) {
+          setStatus(`✅ Identity confirmed for ${data.student.name} (${data.student.student_id})`, "ok");
+          const st = data.student || {};
+          resId.textContent = st.student_id || "-";
+          resName.textContent = st.name || "-";
+          resEmail.textContent = st.email || "-";
+
+          if (st.photo) {
+            const photoUrl = "/" + st.photo.replace(/\\/g, "/");
+            console.log("Attempting to load photo:", photoUrl);
+            resPhoto.src = photoUrl;
+            resPhotoWrap.style.display = 'block';
+          } else {
+            console.log("No photo provided in student data");
+            resPhotoWrap.style.display = 'none';
+          }
+          // Show proceed button and set link
+          faceScanLink.href = "{{ url_for('face_scan', student_id='') }}" + st.student_id;
+          proceedButton.style.display = 'block';
+          resultCard.style.display = 'block';
+        } else {
+          setStatus("❌ " + (data.message || "Invalid QR code."), "err");
+          resultCard.style.display = 'none';
+          proceedButton.style.display = 'none';
+        }
+      } catch (err) {
+        console.error("Validation error:", err);
+        setStatus("❌ Error validating QR code: " + err.message, "err");
+        resultCard.style.display = 'none';
+        proceedButton.style.display = 'none';
+      }
+
+      if (html5QrcodeScanner) {
+        html5QrcodeScanner.stop().then(() => {
+          stopBtn.disabled = true;
+          startBtn.disabled = false;
+        }).catch(err => {
+          console.error("Stop camera error:", err);
+        });
+      }
+    }
+
+    function onScanSuccess(decodedText, decodedResult) {
+      setStatus("Scanning success. Validating...", "");
+      validateQR(decodedText.trim());
+    }
+
+    function onScanFailure(error) {
+      // Silent to avoid spam
+    }
+
+    async function startCamera() {
+      setStatus("Starting camera...", "");
+      startBtn.disabled = true;
+      stopBtn.disabled = false;
+
+      try {
+        const cameras = await Html5Qrcode.getCameras();
+        console.log("Available cameras:", cameras);
+        currentCameraId = (cameras && cameras.length) ? cameras[0].id : null;
+
+        if (!currentCameraId) {
+          setStatus("❌ No camera found.", "err");
+          startBtn.disabled = false;
+          stopBtn.disabled = true;
+          return;
+        }
+
+        html5QrcodeScanner = new Html5Qrcode("reader");
+        let config = { fps: 10, qrbox: { width: 250, height: 250 } };
+        try {
+          await html5QrcodeScanner.start(currentCameraId, config, onScanSuccess, onScanFailure);
+        } catch (err) {
+          console.warn("Default camera failed, trying environment mode:", err);
+          config.videoConstraints = { facingMode: "environment" };
+          await html5QrcodeScanner.start(currentCameraId, config, onScanSuccess, onScanFailure);
+        }
+        setStatus("Camera running. Point a QR code to the box.", "");
+      } catch (err) {
+        console.error("Camera start error:", err);
+        setStatus("❌ Failed to start camera: " + err.message, "err");
+        startBtn.disabled = false;
+        stopBtn.disabled = true;
+      }
+    }
+
+    function stopCamera() {
+      if (!html5QrcodeScanner) return;
+      setStatus("Stopping camera...", "");
+      html5QrcodeScanner.stop().then(() => {
+        html5QrcodeScanner.clear();
+        html5QrcodeScanner = null;
+        setStatus("Camera stopped.", "");
+        startBtn.disabled = false;
+        stopBtn.disabled = true;
+      }).catch(err => {
+        console.error("Stop camera error:", err);
+        setStatus("❌ Failed to stop camera: " + err.message, "err");
+      });
+    }
+
+    startBtn.addEventListener("click", startCamera);
+    stopBtn.addEventListener("click", stopCamera);
+  </script>
+</body>
+</html>

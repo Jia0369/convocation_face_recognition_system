@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Face Scanner</title>
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600&display=swap" rel="stylesheet">
+  <style>
+    body { font-family: 'Poppins', sans-serif; background: #f7faff; text-align: center; padding: 40px; }
+    h2 { color: #003366; margin-bottom: 8px; }
+    .panel { max-width: 720px; margin: 0 auto; background: #fff; border-radius: 12px; padding: 24px; box-shadow: 0 2px 16px rgba(0,0,0,.06); }
+    #reader { width: 100%; max-width: 520px; margin: 16px auto; position: relative; }
+    #video { width: 100%; max-width: 520px; }
+    #videoCanvas { display: none; }
+    .face-guide { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 300px; height: 300px; border: 2px dashed green; border-radius: 10px; }
+    .row { display: flex; gap: 12px; justify-content: center; margin: 12px 0; flex-wrap: wrap; }
+    button { background: #3399ff; color: #fff; padding: 10px 18px; border: none; border-radius: 8px; font-weight: 600; cursor: pointer; }
+    button.secondary { background: #004080; }
+    button:disabled { opacity: .6; cursor: not-allowed; }
+    .msg { margin-top: 12px; font-weight: 600; }
+    .ok { color: #107c10; }
+    .err { color: #b00020; }
+    .card { background: #eef3fb; border: 1px solid #cfd9e6; border-radius: 10px; padding: 12px; margin: 12px auto; max-width: 520px; text-align: left; }
+    .label { color: #004080; font-weight: 600; }
+    .value { color: #002244; }
+    .footer { margin-top: 16px; }
+    .modal-backdrop {
+      display: none;
+      position: fixed; inset: 0;
+      background: rgba(0,0,0,.45);
+      justify-content: center; align-items: center;
+      z-index: 1000;
+    }
+    .modal {
+      width: min(90vw, 420px);
+      background: #fff; border-radius: 12px;
+      padding: 24px; box-shadow: 0 8px 32px rgba(0,0,0,.15);
+      text-align: center;
+    }
+    .modal h3 { margin: 0 0 12px; color: #003366; }
+    .modal p { margin: 0 0 20px; color: #334; }
+    .modal button {
+      background: #3399ff; color: #fff; border: none; border-radius: 8px;
+      padding: 10px 18px; font-weight: 600; cursor: pointer;
+    }
+  </style>
+</head>
+<body>
+  <div class="panel">
+    <h2>Face Scanner</h2>
+    <p>Position your face within the green dashed box to verify your identity for Student ID: {{ student_id }}.</p>
+
+    <div class="row">
+      <button id="startBtn">Start Camera</button>
+      <button id="captureBtn" disabled>Capture Face</button>
+      <button id="autoBtn" disabled>Start Auto Capture</button>
+      <form action="{{ url_for('home') }}" style="display:inline;">
+        <button class="secondary" type="submit">Back to Home</button>
+      </form>
+    </div>
+
+    <div id="reader">
+      <video id="video" autoplay playsinline></video>
+      <canvas id="videoCanvas"></canvas>
+      <div id="faceGuide" class="face-guide" style="display:none;"></div>
+    </div>
+
+    <div id="status" class="msg"></div>
+
+    <div id="resultCard" class="card" style="display:none;">
+      <div><span class="label">Student ID:</span> <span class="value">{{ student_id }}</span></div>
+      <div><span class="label">Recognized Name:</span> <span class="value" id="resName">-</span></div>
+      <div><span class="label">Match Status:</span> <span class="value" id="resMatch">-</span></div>
+    </div>
+
+    <div class="footer">
+      <small>Tip: Ensure your face is well-lit and centered in the green box.</small>
+    </div>
+  </div>
+
+  <div id="confirmBackdrop" class="modal-backdrop">
+    <div class="modal">
+      <h3>Confirmation</h3>
+      <p id="confirmText">Congratulations!</p>
+      <button id="confirmOk">OK</button>
+    </div>
+  </div>
+
+  <script>
+    let stream = null;
+    let autoCapture = false;
+    let matched = false;
+
+    const video = document.getElementById('video');
+    const videoCanvas = document.getElementById('videoCanvas');
+    const ctx = videoCanvas.getContext('2d');
+    const startBtn = document.getElementById('startBtn');
+    const captureBtn = document.getElementById('captureBtn');
+    const autoBtn = document.getElementById('autoBtn');
+    const statusEl = document.getElementById('status');
+    const resultCard = document.getElementById('resultCard');
+    const resName = document.getElementById('resName');
+    const resMatch = document.getElementById('resMatch');
+    const faceGuide = document.getElementById('faceGuide');
+
+    const confirmBackdrop = document.getElementById('confirmBackdrop');
+    const confirmText = document.getElementById('confirmText');
+    const confirmOk = document.getElementById('confirmOk');
+
+    function setStatus(text, cls) {
+      statusEl.className = 'msg ' + (cls || '');
+      statusEl.textContent = text || '';
+    }
+
+    function showConfirm(message, onOk) {
+      confirmText.textContent = message || "Congratulations!";
+      confirmBackdrop.style.display = 'flex';
+      const handler = () => {
+        confirmBackdrop.style.display = 'none';
+        confirmOk.removeEventListener('click', handler);
+        if (typeof onOk === 'function') onOk();
+      };
+      confirmOk.addEventListener('click', handler);
+    }
+
+    async function startCamera() {
+      startBtn.disabled = true;
+      captureBtn.disabled = false;
+      autoBtn.disabled = false;
+      matched = false;
+      setStatus("Starting camera...", "");
+
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user", width: 640, height: 480 } });
+        video.srcObject = stream;
+        video.onloadedmetadata = () => {
+          videoCanvas.width = video.videoWidth;
+          videoCanvas.height = video.videoHeight;
+          faceGuide.style.display = 'block';
+          setStatus("Camera running. Click 'Capture Face' or 'Start Auto Capture' to verify.", "");
+        };
+      } catch (err) {
+        setStatus("❌ Failed to start camera: " + err.message, "err");
+        faceGuide.style.display = 'none';
+        startBtn.disabled = false;
+        captureBtn.disabled = true;
+        autoBtn.disabled = true;
+      }
+    }
+
+    async function captureFrame() {
+      if (!stream) {
+        setStatus("❌ Camera not running.", "err");
+        return;
+      }
+      if (matched) return;
+
+      setStatus("Capturing frame...", "");
+      captureBtn.disabled = true;
+
+      ctx.drawImage(video, 0, 0, videoCanvas.width, videoCanvas.height);
+      const faceImageData = videoCanvas.toDataURL('image/jpeg', 0.95);
+
+      await sendFrameToServer(faceImageData);
+      if (!matched) captureBtn.disabled = !autoCapture;
+    }
+
+    async function startAutoCapture() {
+      if (!stream) {
+        setStatus("❌ Camera not running.", "err");
+        return;
+      }
+
+      autoCapture = !autoCapture;
+      autoBtn.textContent = autoCapture ? "Stop Auto Capture" : "Start Auto Capture";
+      captureBtn.disabled = autoCapture;
+      setStatus(autoCapture ? "Auto capture started..." : "Auto capture stopped.", "");
+
+      if (autoCapture) {
+        async function loop() {
+          if (!stream || !autoCapture || matched) {
+            setStatus(autoCapture ? "Auto capture stopped." : "Auto capture idle.", "");
+            autoBtn.textContent = "Start Auto Capture";
+            captureBtn.disabled = false;
+            autoCapture = false;
+            return;
+          }
+          await captureFrame();
+          setTimeout(loop, 2000);
+        }
+        loop();
+      }
+    }
+
+    async function sendFrameToServer(faceImageData) {
+      setStatus("Verifying face...", "");
+      try {
+        const resp = await fetch("/api/validate_face/{{ student_id }}", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ face_image: faceImageData })
+        });
+        const data = await resp.json();
+
+        if (data.ok && !matched) {
+          matched = true;
+          setStatus("✅ Face verified.", "ok");
+          resName.textContent = data.name || "-";
+          resMatch.textContent = "Match";
+          resMatch.style.color = '#107c10';
+          resultCard.style.display = 'block';
+
+          const name = data.name || "Student";
+          const course = data.course || "your course";
+          showConfirm(`Congratulations ${name} for graduating from ${course}`, () => {
+            stopCamera();
+          });
+
+          autoCapture = false;
+          autoBtn.textContent = "Start Auto Capture";
+          captureBtn.disabled = true;
+        } else if (!data.ok) {
+          setStatus(`❌ ${data.message || "Face verification failed."}`, "err");
+          resName.textContent = data.name || "-";
+          resMatch.textContent = "No Match";
+          resMatch.style.color = '#b00020';
+          resultCard.style.display = 'block';
+        }
+      } catch (err) {
+        setStatus("❌ Error during face validation.", "err");
+      }
+    }
+
+    function stopCamera() {
+      if (stream) {
+        stream.getTracks().forEach(track => track.stop());
+        stream = null;
+      }
+      video.srcObject = null;
+      ctx.clearRect(0, 0, videoCanvas.width, videoCanvas.height);
+      faceGuide.style.display = 'none';
+      setStatus("Camera stopped.", "");
+      startBtn.disabled = false;
+      captureBtn.disabled = true;
+      autoBtn.disabled = true;
+      autoBtn.textContent = "Start Auto Capture";
+      autoCapture = false;
+    }
+
+    document.addEventListener('DOMContentLoaded', () => {
+      startBtn.addEventListener('click', startCamera);
+      captureBtn.addEventListener('click', captureFrame);
+      autoBtn.addEventListener('click', startAutoCapture);
+    });
+  </script>
+</body>
+</html>
